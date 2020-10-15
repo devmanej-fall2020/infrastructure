@@ -83,22 +83,3 @@ resource "aws_route_table_association" "rt_association_3" {
   subnet_id      = aws_subnet.subnet3.id
   route_table_id = aws_route_table.r_table.id
 }
-
-
-
-
-
-
-
-# resource "aws_instance" "ec2instance-assignment4" {
-#   ami = "ami-0b03bf60f9546c459"
-#   instance_type = "t2.micro"
-#   # key_name = "${var.ssh_key_name}"
-#   vpc_security_group_ids = ["sg-5cfa126d"]
-#   subnet_id = "subnet-1"
-#   associate_public_ip_address = true
-#   root_block_device {
-#       volume_type = "gp2"
-#       volume_size = 8
-#   }
-# }
