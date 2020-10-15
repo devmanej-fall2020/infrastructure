@@ -3,7 +3,7 @@
 Terraform is the infrastructure as code tool from HashiCorp. It is a tool for building, changing, and managing infrastructure in a safe, repeatable way. Operators and Infrastructure teams can use Terraform to manage environments with a configuration language called the HashiCorp Configuration Language (HCL) for human-readable, automated deployments.
 
 ## Prerequisites:
-1. Cloud Provider - In this case, AWS
+1. Cloud Provider - In this case, Amazon Web Services
 2. CLI access setup for above account
 3. Terraform installed on local machine
 
