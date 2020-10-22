@@ -262,14 +262,16 @@ resource "aws_iam_policy" "wa_s3_policy" {
     "Version": "2012-10-17",
     "Statement": [
         {
-            "Action": [
-                "s3:*"
-            ],
+            "Sid": "ListObjectsInBucket",
             "Effect": "Allow",
-            "Resource": [
-                "arn:aws:s3:::webapp.jaisubash.devmane",
-                "arn:aws:s3:::webapp.jaisubash.devmane/*"
-            ]
+            "Action": ["s3:ListBucket"],
+            "Resource": ["arn:aws:s3:::webapp.jaisubash.devmane"]
+        },
+        {
+            "Sid": "AllObjectActions",
+            "Effect": "Allow",
+            "Action": "s3:*Object",
+            "Resource": ["arn:aws:s3:::webapp.jaisubash.devmane/*"]
         }
     ]
 }
