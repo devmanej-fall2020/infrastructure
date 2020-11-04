@@ -155,7 +155,7 @@ resource "aws_security_group" "database_security_group"{
 
 
 resource "aws_s3_bucket" "assignmentbucket" {
-  bucket = "webapp.jaisubash.devmane"
+  bucket = var.s3_image_bucket
   acl    = "private"
   force_destroy = true
 
@@ -233,12 +233,12 @@ resource "aws_instance" "ec2instance-assignment" {
   user_data = <<-EOF
                 #!/bin/bash
                 sudo touch .env\n
-                sudo echo "export RDS_DB_USERNAME=${var.cred_vars["username"]}" >> /home/ubuntu/.bashrc
-                sudo echo "export RDS_DB_PASSWORD=${var.cred_vars["password"]}" >> /home/ubuntu/.bashrc
-                sudo echo "export RDS_DB_HOSTNAME=${aws_db_instance.rdsassignmentdb.address}" >> /home/ubuntu/.bashrc
-                sudo echo "export S3_BUCKET_NAME=${aws_s3_bucket.assignmentbucket.bucket}" >> /home/ubuntu/.bashrc
-                sudo echo "export RDS_DB_ENDPOINT=${aws_db_instance.rdsassignmentdb.endpoint}" >> /home/ubuntu/.bashrc
-                sudo echo "export RDS_DB_NAME=${aws_db_instance.rdsassignmentdb.name}" >> /home/ubuntu/.bashrc
+                sudo echo "export RDS_DB_USERNAME=${var.cred_vars["username"]}" >> /etc/environment
+                sudo echo "export RDS_DB_PASSWORD=${var.cred_vars["password"]}" >> /etc/environment
+                sudo echo "export RDS_DB_HOSTNAME=${aws_db_instance.rdsassignmentdb.address}" >> /etc/environment
+                sudo echo "export S3_BUCKET_NAME=${aws_s3_bucket.assignmentbucket.bucket}" >> /etc/environment
+                sudo echo "export RDS_DB_ENDPOINT=${aws_db_instance.rdsassignmentdb.endpoint}" >> /etc/environment
+                sudo echo "export RDS_DB_NAME=${aws_db_instance.rdsassignmentdb.name}" >> /etc/environment
   EOF
 
 
@@ -265,13 +265,13 @@ resource "aws_iam_policy" "wa_s3_policy" {
             "Sid": "ListObjectsInBucket",
             "Effect": "Allow",
             "Action": ["s3:ListBucket"],
-            "Resource": ["arn:aws:s3:::webapp.jaisubash.devmane"]
+            "Resource": ["arn:aws:s3:::${var.s3_image_bucket}"]
         },
         {
             "Sid": "AllObjectActions",
             "Effect": "Allow",
             "Action": "s3:*Object",
-            "Resource": ["arn:aws:s3:::webapp.jaisubash.devmane/*"]
+            "Resource": ["arn:aws:s3:::${var.s3_image_bucket}/*"]
         }
     ]
 }
@@ -280,10 +280,11 @@ EOF
 
 
 resource "aws_iam_instance_profile" "ec2_iam_ip" {
-  name = "test_profile"
-  role = aws_iam_role.ec2_role.name
+  name = "test1_profile"
+  role = aws_iam_role.CodeDeployEC2ServiceRole.name
 }
 
+//ec2 role to pass on access to s3 buckets without explicitly specifying credentials
 resource "aws_iam_role" "ec2_role" {
   name = "ec2_role"
 
@@ -304,16 +305,257 @@ resource "aws_iam_role" "ec2_role" {
 EOF
 }
 
+//codedeploy_ec2_service_role definition
+resource "aws_iam_role" "CodeDeployEC2ServiceRole" {
+  name = "CodeDeployEC2ServiceRole"
 
-
-resource "aws_iam_policy_attachment" "attachement" {
-  name       = "Policy Attachment"
-  roles      = [aws_iam_role.ec2_role.name]
-  policy_arn = aws_iam_policy.wa_s3_policy.arn
+  assume_role_policy = <<EOF
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Action": "sts:AssumeRole",
+            "Principal": {
+               "Service": "ec2.amazonaws.com"
+            },
+            "Effect": "Allow",
+            "Sid": ""
+        }
+    ]
+}
+EOF
 }
 
 
 
+
+//wa_s3 policy attachment
+resource "aws_iam_policy_attachment" "attachement" {
+  name       = "Policy Attachment"
+  roles      = [aws_iam_role.CodeDeployEC2ServiceRole.name]
+  policy_arn = aws_iam_policy.wa_s3_policy.arn
+}
+
+//CodeDeploy-EC2-S3 IAM Policy attachment to CodeDeployEC2ServiceRole role
+resource "aws_iam_policy_attachment" "codedeploy_ec2_s3_policy_attachment" {
+  name       = "Policy Attachment"
+  roles      = [aws_iam_role.CodeDeployEC2ServiceRole.name]
+  policy_arn = aws_iam_policy.CodeDeploy-EC2-S3.arn
+}
+
+
+
+// getting data of ghactions iam user
+data "aws_iam_user" "ghactions_user" {
+  user_name = "ghactions"
+}
+
+//new policies to be added
+# CodeDeploy-EC2-S3 IAM Policy
+resource "aws_iam_policy" "CodeDeploy-EC2-S3" {
+  name        = "CodeDeploy-EC2-S3"
+  path        = "/"
+  description = "CodeDeploy-EC2-S3 policy"
+  policy = <<EOF
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Action": [
+                "s3:Get*",
+                "s3:GetObject",
+                "s3:List*",
+                "s3:Put*",
+                "s3:PutObject"
+
+
+            ],
+            "Effect": "Allow",
+            "Resource": [
+              "arn:aws:s3:::${var.codedeploy_bucket}",
+              "arn:aws:s3:::${var.codedeploy_bucket}/*"
+              ]
+        }
+    ]
+}
+EOF
+}
+
+//attachment of GH-Upload-To-S3 IAM Policy to ghactions_user
+resource "aws_iam_user_policy_attachment" "ghactions_attach_gh_upload_to_s3_policy" {
+  user       = data.aws_iam_user.ghactions_user.user_name
+  policy_arn = aws_iam_policy.GH-Upload-To-S3.arn
+}
+
+
+# GH-Upload-To-S3 IAM Policy
+resource "aws_iam_policy" "GH-Upload-To-S3" {
+  name        = "GH-Upload-To-S3"
+  path        = "/"
+  description = "GH-Upload-To-S3 policy"
+  policy = <<EOF
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "s3:PutObject",
+                "s3:PutObjectAcl",
+                "s3:Put*",
+                "s3:Get*",
+                "s3:List*"
+            ],
+            "Resource": [
+              "arn:aws:s3:::${var.codedeploy_bucket}",
+              "arn:aws:s3:::${var.codedeploy_bucket}/*"
+            ]
+        }
+    ]
+}
+EOF
+}
+
+data "aws_caller_identity" "current_user_details" {}
+
+
+//CodeDeployServiceRole, will be utilizing the codedeploy service
+resource "aws_iam_role" "CodeDeployServiceRole" {
+  name = "CodeDeployServiceRole"
+
+  assume_role_policy = <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "",
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "codedeploy.amazonaws.com"
+      },
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}
+EOF
+}
+
+//adding policy of default policy AWSCodeDeployRole to CodeDeployServiceRole
+resource "aws_iam_role_policy_attachment" "AWSCodeDeployRole" {
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole"
+  role       = aws_iam_role.CodeDeployServiceRole.name
+}
+
+//defining the codedeploy app
+resource "aws_codedeploy_app" "csye6225-webapp" {
+  compute_platform = "Server"
+  name             = "csye6225-webapp"
+}
+
+//codedeploy group
+resource "aws_codedeploy_deployment_group" "csye6225-webapp-deployment" {
+  app_name              = aws_codedeploy_app.csye6225-webapp.name
+  deployment_group_name = "csye6225-webapp-deployment"
+  service_role_arn      = aws_iam_role.CodeDeployServiceRole.arn
+  deployment_config_name = "CodeDeployDefault.AllAtOnce"
+
+  deployment_style {
+    deployment_option = "WITHOUT_TRAFFIC_CONTROL"
+    deployment_type   = "IN_PLACE"
+  }
+
+  ec2_tag_set {
+    ec2_tag_filter {
+      key   = "Name"
+      type  = "KEY_AND_VALUE"
+      value = "ec2instance-assignment"
+    }
+  }
+
+
+}
+
+
+
+
+
+
+# GH-Code-Deploy Policy
+resource "aws_iam_policy" "GH-Code-Deploy" {
+  name        = "GH-Code-Deploy"
+  description = "GH-Code-Deploy policy"
+  policy = <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "codedeploy:RegisterApplicationRevision",
+        "codedeploy:GetApplicationRevision"
+      ],
+      "Resource": [
+        "arn:aws:codedeploy:${var.current_region}:${data.aws_caller_identity.current_user_details.account_id}:application:${var.codedeploy_application_name}"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "codedeploy:CreateDeployment",
+        "codedeploy:GetDeployment"
+      ],
+      "Resource": [
+        "*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "codedeploy:GetDeploymentConfig"
+      ],
+      "Resource": [
+        "arn:aws:codedeploy:${var.current_region}:${data.aws_caller_identity.current_user_details.account_id}:deploymentconfig:CodeDeployDefault.OneAtATime",
+        "arn:aws:codedeploy:${var.current_region}:${data.aws_caller_identity.current_user_details.account_id}:deploymentconfig:CodeDeployDefault.HalfAtATime",
+        "arn:aws:codedeploy:${var.current_region}:${data.aws_caller_identity.current_user_details.account_id}:deploymentconfig:CodeDeployDefault.AllAtOnce"
+      ]
+    }
+  ]
+}
+EOF
+}
+
+//attachment of GH-Code-Deploy IAM Policy to ghactions_user
+resource "aws_iam_user_policy_attachment" "ghactions_attach_ghcodedeploy_policy" {
+  user       = data.aws_iam_user.ghactions_user.user_name
+  policy_arn = aws_iam_policy.GH-Code-Deploy.arn
+}
+
+//creating an elastic ip
+resource "aws_eip" "elastic_ip" {
+  instance = aws_instance.ec2instance-assignment.id
+  vpc      = true
+}
+
+//fetching data which contains route 53 zone id
+data "aws_route53_zone" "fetched_zone" {
+  name         = var.domain
+  private_zone = false
+}
+
+
+//create a type record from eip
+resource "aws_route53_record" "www" {
+  zone_id = data.aws_route53_zone.fetched_zone.zone_id
+  name    = "www.api.${data.aws_route53_zone.fetched_zone.name}"
+  type    = "A"
+  ttl     = "60"
+  records = [aws_eip.elastic_ip.public_ip]
+}
+
+
+
+
+//adding dynamo db resource
 resource "aws_dynamodb_table" "assignment-dynamodb" {
   name           = "csye6225"
   billing_mode   = "PROVISIONED"

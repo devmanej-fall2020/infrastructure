@@ -27,6 +27,11 @@ variable "current_region"{
 }
 
 
+variable "codedeploy_application_name"{
+  default = "csye6225-webapp"
+}
+
+
 variable "cred_vars" {
   type = map(string)
 
@@ -37,4 +42,38 @@ variable "cred_vars" {
     "identifier" = "csye6225-f20"
     "key_name" = "csye6225-aws-fall2020"
   }
+}
+
+
+//change variable name accordingly for dev and prod
+variable "s3_image_bucket" {
+  default = "webapp.jaisubash.devmane"
+}
+
+
+
+//comment out for either case
+//prod codedeploy bucket
+variable "codedeploy_bucket"{
+  default = "codedeploy.prod.jaisubashdevmane.me"
+}
+
+//comment out for either case
+//dev codedeploy bucket
+# variable "codedeploy_bucket"{
+#   default = "codedeploy.dev.jaisubashdevmane.me"
+# }
+
+
+
+
+//comment out for either case
+//dev domain
+# variable "domain"{
+#   default = "dev.jaisubashdevmane.me"
+# }
+
+//prod domain
+variable "domain"{
+  default = "prod.jaisubashdevmane.me"
 }
