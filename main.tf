@@ -505,7 +505,7 @@ resource "aws_iam_policy" "GH-Code-Deploy" {
         "codedeploy:GetDeployment"
       ],
       "Resource": [
-        "*"
+        "arn:aws:codedeploy:${var.current_region}:${data.aws_caller_identity.current_user_details.account_id}:deploymentgroup:${var.codedeploy_application_name}/${var.codedeploy_group_name}"
       ]
     },
     {

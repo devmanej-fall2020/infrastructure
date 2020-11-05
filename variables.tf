@@ -31,6 +31,10 @@ variable "codedeploy_application_name"{
   default = "csye6225-webapp"
 }
 
+variable "codedeploy_group_name"{
+  default = "csye6225-webapp-deployment"
+}
+
 
 variable "cred_vars" {
   type = map(string)
