@@ -572,3 +572,9 @@ resource "aws_dynamodb_table" "assignment-dynamodb" {
     Name = "assignment-dynamodb"
   }
 }
+
+# //adding policy of AWSCloudWatchAgentServerPolicy to CodeDeployEC2ServiceRole role
+resource "aws_iam_role_policy_attachment" "CloudWatchAgentServerPolicy" {
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+  role       = aws_iam_role.CodeDeployEC2ServiceRole.name
+}
