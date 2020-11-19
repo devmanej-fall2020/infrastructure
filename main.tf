@@ -157,7 +157,7 @@ resource "aws_security_group" "webapp_security_group" {
   # }
 
   ingress {
-    description = "Port 4000"
+    description = "Allow Load Balancer Access"
     from_port   = 4000
     to_port     = 4000
     protocol    = "tcp"
