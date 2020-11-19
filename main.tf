@@ -85,17 +85,11 @@ resource "aws_route_table_association" "rt_association_3" {
 }
 
 
-resource "aws_security_group" "application_security_group" {
+resource "aws_security_group" "loadbalancer_security_group" {
   description = "Allow inbound traffic"
   vpc_id      = aws_vpc.assignmentvpc.id
 
-  ingress {
-    description = "Port 22"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = [var.cidr_block_map["cidr_route"]]
-  }
+
 
   ingress {
     description = "Port 80"
@@ -113,12 +107,61 @@ resource "aws_security_group" "application_security_group" {
     cidr_blocks = [var.cidr_block_map["cidr_route"]]
   }
 
-  ingress {
+  egress {
     description = "Port 4000"
     from_port   = 4000
     to_port     = 4000
     protocol    = "tcp"
     cidr_blocks = [var.cidr_block_map["cidr_route"]]
+  }
+
+  # egress {
+  #   from_port   = 0
+  #   to_port     = 0
+  #   protocol    = "-1"
+  #   cidr_blocks = ["0.0.0.0/0"]
+  #}
+
+  tags = {
+    Name = "loadbalancer_security_group"
+  }
+
+}
+
+resource "aws_security_group" "webapp_security_group" {
+  description = "Allow inbound traffic"
+  vpc_id      = aws_vpc.assignmentvpc.id
+
+  # ingress {
+  #   description = "Port 22"
+  #   from_port   = 22
+  #   to_port     = 22
+  #   protocol    = "tcp"
+  #   cidr_blocks = [var.cidr_block_map["cidr_route"]]
+  # }
+
+  # ingress {
+  #   description = "Port 80"
+  #   from_port   = 80
+  #   to_port     = 80
+  #   protocol    = "tcp"
+  #   cidr_blocks = [var.cidr_block_map["cidr_route"]]
+  # }
+
+  # ingress {
+  #   description = "Port 443"
+  #   from_port   = 443
+  #   to_port     = 443
+  #   protocol    = "tcp"
+  #   cidr_blocks = [var.cidr_block_map["cidr_route"]]
+  # }
+
+  ingress {
+    description = "Port 4000"
+    from_port   = 4000
+    to_port     = 4000
+    protocol    = "tcp"
+    security_groups = [aws_security_group.loadbalancer_security_group.id]
   }
 
   egress {
@@ -129,7 +172,7 @@ resource "aws_security_group" "application_security_group" {
   }
 
   tags = {
-    Name = "application_security_group"
+    Name = "webapp_security_group"
   }
 }
 
@@ -144,7 +187,7 @@ resource "aws_security_group" "database_security_group"{
     from_port   = 3306
     to_port     = 3306
     protocol    = "tcp"
-    security_groups = [aws_security_group.application_security_group.id]
+    security_groups = [aws_security_group.webapp_security_group.id]
 }
 
 
@@ -220,37 +263,37 @@ data "aws_ami" "amigetfunction" {
 }
 
 
-resource "aws_instance" "ec2instance-assignment" {
-  ami = data.aws_ami.amigetfunction.id
-  instance_type = "t2.micro"
-  key_name = var.cred_vars["key_name"]
-  vpc_security_group_ids = [aws_security_group.application_security_group.id]
-  subnet_id = aws_subnet.subnet1.id
-  iam_instance_profile = aws_iam_instance_profile.ec2_iam_ip.name
-  associate_public_ip_address = true
-  disable_api_termination = false
+# resource "aws_instance" "ec2instance-assignment" {
+#   ami = data.aws_ami.amigetfunction.id
+#   instance_type = "t2.micro"
+#   key_name = var.cred_vars["key_name"]
+#   vpc_security_group_ids = [aws_security_group.webapp_security_group.id]
+#   subnet_id = aws_subnet.subnet1.id
+#   iam_instance_profile = aws_iam_instance_profile.ec2_iam_ip.name
+#   associate_public_ip_address = true
+#   disable_api_termination = false
 
-  user_data = <<-EOF
-                #!/bin/bash
-                sudo touch .env\n
-                sudo echo "export RDS_DB_USERNAME=${var.cred_vars["username"]}" >> /etc/environment
-                sudo echo "export RDS_DB_PASSWORD=${var.cred_vars["password"]}" >> /etc/environment
-                sudo echo "export RDS_DB_HOSTNAME=${aws_db_instance.rdsassignmentdb.address}" >> /etc/environment
-                sudo echo "export S3_BUCKET_NAME=${aws_s3_bucket.assignmentbucket.bucket}" >> /etc/environment
-                sudo echo "export RDS_DB_ENDPOINT=${aws_db_instance.rdsassignmentdb.endpoint}" >> /etc/environment
-                sudo echo "export RDS_DB_NAME=${aws_db_instance.rdsassignmentdb.name}" >> /etc/environment
-  EOF
+#   user_data = <<-EOF
+#                 #!/bin/bash
+#                 sudo touch .env\n
+#                 sudo echo "export RDS_DB_USERNAME=${var.cred_vars["username"]}" >> /etc/environment
+#                 sudo echo "export RDS_DB_PASSWORD=${var.cred_vars["password"]}" >> /etc/environment
+#                 sudo echo "export RDS_DB_HOSTNAME=${aws_db_instance.rdsassignmentdb.address}" >> /etc/environment
+#                 sudo echo "export S3_BUCKET_NAME=${aws_s3_bucket.assignmentbucket.bucket}" >> /etc/environment
+#                 sudo echo "export RDS_DB_ENDPOINT=${aws_db_instance.rdsassignmentdb.endpoint}" >> /etc/environment
+#                 sudo echo "export RDS_DB_NAME=${aws_db_instance.rdsassignmentdb.name}" >> /etc/environment
+#   EOF
 
 
-  root_block_device {
-      volume_type = "gp2"
-      volume_size =  20
-      delete_on_termination = true
-  }
-  tags = {
-    Name = "ec2instance-assignment"
-  }
-}
+#   root_block_device {
+#       volume_type = "gp2"
+#       volume_size =  20
+#       delete_on_termination = true
+#   }
+#   tags = {
+#     Name = "ec2instance-assignment"
+#   }
+# }
 
 # IAM Policy
 resource "aws_iam_policy" "wa_s3_policy" {
@@ -458,6 +501,13 @@ resource "aws_codedeploy_deployment_group" "csye6225-webapp-deployment" {
   deployment_group_name = "csye6225-webapp-deployment"
   service_role_arn      = aws_iam_role.CodeDeployServiceRole.arn
   deployment_config_name = "CodeDeployDefault.AllAtOnce"
+  autoscaling_groups = [aws_autoscaling_group.asg_webapp.name]
+  load_balancer_info {
+    target_group_info {
+      name = aws_lb_target_group.application-target-group.name
+    }
+  }
+
 
   deployment_style {
     deployment_option = "WITHOUT_TRAFFIC_CONTROL"
@@ -531,10 +581,10 @@ resource "aws_iam_user_policy_attachment" "ghactions_attach_ghcodedeploy_policy"
 }
 
 //creating an elastic ip
-resource "aws_eip" "elastic_ip" {
-  instance = aws_instance.ec2instance-assignment.id
-  vpc      = true
-}
+# resource "aws_eip" "elastic_ip" {
+#   instance = aws_instance.ec2instance-assignment.id
+#   vpc      = true
+# }
 
 //fetching data which contains route 53 zone id
 data "aws_route53_zone" "fetched_zone" {
@@ -548,8 +598,12 @@ resource "aws_route53_record" "www" {
   zone_id = data.aws_route53_zone.fetched_zone.zone_id
   name    = "www.api.${data.aws_route53_zone.fetched_zone.name}"
   type    = "A"
-  ttl     = "60"
-  records = [aws_eip.elastic_ip.public_ip]
+
+  alias {
+    name                   = aws_lb.assignment-load-balancer.dns_name
+    zone_id                = aws_lb.assignment-load-balancer.zone_id
+    evaluate_target_health = true
+  }
 }
 
 
@@ -578,3 +632,161 @@ resource "aws_iam_role_policy_attachment" "CloudWatchAgentServerPolicy" {
   policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
   role       = aws_iam_role.CodeDeployEC2ServiceRole.name
 }
+
+#launch config
+resource "aws_launch_configuration" "asg_launch_config" {
+  name_prefix   = "asg_launch_config"
+  image_id      = data.aws_ami.amigetfunction.id
+  instance_type = "t2.micro"
+  key_name = var.cred_vars["key_name"]
+  security_groups = [aws_security_group.webapp_security_group.id]
+  associate_public_ip_address = true
+  iam_instance_profile = aws_iam_instance_profile.ec2_iam_ip.name
+
+
+  user_data = <<-EOF
+                #!/bin/bash
+                sudo touch .env\n
+                sudo echo "export RDS_DB_USERNAME=${var.cred_vars["username"]}" >> /etc/environment
+                sudo echo "export RDS_DB_PASSWORD=${var.cred_vars["password"]}" >> /etc/environment
+                sudo echo "export RDS_DB_HOSTNAME=${aws_db_instance.rdsassignmentdb.address}" >> /etc/environment
+                sudo echo "export S3_BUCKET_NAME=${aws_s3_bucket.assignmentbucket.bucket}" >> /etc/environment
+                sudo echo "export RDS_DB_ENDPOINT=${aws_db_instance.rdsassignmentdb.endpoint}" >> /etc/environment
+                sudo echo "export RDS_DB_NAME=${aws_db_instance.rdsassignmentdb.name}" >> /etc/environment
+  EOF
+
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+
+}
+
+resource "aws_autoscaling_group" "asg_webapp" {
+  name                 = "asg_webapp"
+  launch_configuration = aws_launch_configuration.asg_launch_config.name
+  min_size             = 3
+  max_size             = 5
+  desired_capacity     = 3
+  default_cooldown     = 60
+  target_group_arns = [aws_lb_target_group.application-target-group.arn]
+  vpc_zone_identifier  = [aws_subnet.subnet1.id, aws_subnet.subnet2.id,aws_subnet.subnet3.id]
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tag {
+    key                 = "Name"
+    value               = "ec2instance-assignment"
+    propagate_at_launch = true
+  }
+
+
+}
+
+//Scale-Up Policy
+resource "aws_autoscaling_policy" "WebServerScaleUpPolicy" {
+  name                   = "WebServerScaleUpPolicy"
+  scaling_adjustment     = 1
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 60
+  autoscaling_group_name = aws_autoscaling_group.asg_webapp.name
+}
+
+//Scale-Down Policy
+resource "aws_autoscaling_policy" "WebServerScaleDownPolicy" {
+  name                   = "WebServerScaleDownPolicy"
+  scaling_adjustment     = -1
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 60
+  autoscaling_group_name = aws_autoscaling_group.asg_webapp.name
+}
+
+//Alarm for CPU High
+resource "aws_cloudwatch_metric_alarm" "CPUAlarmHigh" {
+  alarm_name          = "CPUAlarmHigh"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "1"
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "5"
+  alarm_description = "Scale-up if CPU > 5% for 300 seconds"
+
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.asg_webapp.name
+  }
+ 
+  alarm_actions     = [aws_autoscaling_policy.WebServerScaleUpPolicy.arn]
+}
+
+//Alarm for CPU Low
+resource "aws_cloudwatch_metric_alarm" "CPUAlarmLow" {
+  alarm_name          = "CPUAlarmLow"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = "1"
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "3"
+  alarm_description = "Scale-down if CPU < 3% for 300 seconds"
+
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.asg_webapp.name
+  }
+ 
+  alarm_actions     = [aws_autoscaling_policy.WebServerScaleDownPolicy.arn]
+}
+
+//Load Balancer
+resource "aws_lb" "assignment-load-balancer" {
+  name               = "assignment-load-balancer"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.loadbalancer_security_group.id]
+  subnets            = [aws_subnet.subnet1.id, aws_subnet.subnet2.id,aws_subnet.subnet3.id]
+
+  enable_deletion_protection = false
+
+  tags = {
+    Name = "ec2instance-assignment"
+  }
+
+}
+
+//Load Balancer Listener
+resource "aws_lb_listener" "lb_listener" {
+  load_balancer_arn = aws_lb.assignment-load-balancer.arn
+  port              = "80"
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.application-target-group.arn
+  }
+}
+
+resource "aws_lb_target_group" "application-target-group" {
+  name     = "application-target-group"
+  port     = 4000
+  protocol = "HTTP"
+
+  health_check {
+    port = 4000
+    matcher = 200
+    path = "/"
+  }
+  vpc_id   = aws_vpc.assignmentvpc.id
+}
+
+
+
+
+
+
+
+
