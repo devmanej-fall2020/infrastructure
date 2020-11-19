@@ -51,7 +51,7 @@ variable "cred_vars" {
 
 //change variable name accordingly for dev and prod
 variable "s3_image_bucket" {
-  default = "webapp2.jaisubash.devmane"
+  default = "webapp.jaisubash.devmane"
 }
 
 
