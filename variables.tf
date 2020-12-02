@@ -51,7 +51,7 @@ variable "cred_vars" {
 
 //change variable name accordingly for dev and prod
 variable "s3_image_bucket" {
-  default = "webapp.jaisubash.devmane"
+  default = "webapp1.jaisubash.devmane"
 }
 
 
@@ -67,6 +67,10 @@ variable "codedeploy_bucket"{
 # variable "codedeploy_bucket"{
 #   default = "codedeploy.dev.jaisubashdevmane.me"
 # }
+
+variable "serverless_bucket" {
+  default = "serverless1.prod.jaisubashdevmane.me"
+}
 
 
 

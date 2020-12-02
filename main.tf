@@ -132,13 +132,13 @@ resource "aws_security_group" "webapp_security_group" {
   description = "Allow inbound traffic"
   vpc_id      = aws_vpc.assignmentvpc.id
 
-  # ingress {
-  #   description = "Port 22"
-  #   from_port   = 22
-  #   to_port     = 22
-  #   protocol    = "tcp"
-  #   cidr_blocks = [var.cidr_block_map["cidr_route"]]
-  # }
+  ingress {
+    description = "Port 22"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = [var.cidr_block_map["cidr_route"]]
+  }
 
   # ingress {
   #   description = "Port 80"
@@ -451,7 +451,9 @@ resource "aws_iam_policy" "GH-Upload-To-S3" {
             ],
             "Resource": [
               "arn:aws:s3:::${var.codedeploy_bucket}",
-              "arn:aws:s3:::${var.codedeploy_bucket}/*"
+              "arn:aws:s3:::${var.codedeploy_bucket}/*",
+              "arn:aws:s3:::${var.serverless_bucket}",
+              "arn:aws:s3:::${var.serverless_bucket}/*"
             ]
         }
     ]
@@ -653,6 +655,7 @@ resource "aws_launch_configuration" "asg_launch_config" {
                 sudo echo "export S3_BUCKET_NAME=${aws_s3_bucket.assignmentbucket.bucket}" >> /etc/environment
                 sudo echo "export RDS_DB_ENDPOINT=${aws_db_instance.rdsassignmentdb.endpoint}" >> /etc/environment
                 sudo echo "export RDS_DB_NAME=${aws_db_instance.rdsassignmentdb.name}" >> /etc/environment
+                sudo echo "export SNS_TOPIC=${aws_sns_topic.assignment_sns_topic.arn}" >> /etc/environment
   EOF
 
 
@@ -782,6 +785,160 @@ resource "aws_lb_target_group" "application-target-group" {
   }
   vpc_id   = aws_vpc.assignmentvpc.id
 }
+
+resource "aws_sns_topic" "assignment_sns_topic" {
+  name = "assignment_sns_topic"
+}
+
+//adding sns topic to ec2 service role
+resource "aws_iam_role_policy_attachment" "SNSPolicy" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSNSFullAccess"
+  role       = aws_iam_role.CodeDeployEC2ServiceRole.name
+}
+
+resource "aws_iam_role" "iam_for_lambda" {
+  name = "iam_for_lambda"
+
+  assume_role_policy = <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Action": "sts:AssumeRole",
+      "Principal": {
+        "Service": "lambda.amazonaws.com"
+      },
+      "Effect": "Allow",
+      "Sid": ""
+    }
+  ]
+}
+EOF
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_iam_attachment" {
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+  role       = aws_iam_role.iam_for_lambda.name
+}
+
+
+
+
+resource "aws_lambda_function" "assignment_lambda" {
+  filename      = "csye6225-lambda.zip"
+  function_name = "csye6225"
+  role          = aws_iam_role.iam_for_lambda.arn
+  handler       = "index.handler"
+  memory_size   = 256
+  timeout       = 180
+
+
+
+  runtime = "nodejs12.x"
+
+  environment {
+    variables = {
+      Name = "Lambda Function"
+    }
+  }
+}
+
+resource "aws_s3_bucket" "lambdabucket" {
+  bucket = var.serverless_bucket
+  acl    = "private"
+  force_destroy = true
+
+
+  server_side_encryption_configuration {    
+    rule {     
+       apply_server_side_encryption_by_default { sse_algorithm = "AES256"}
+       }
+  }
+
+  lifecycle_rule {
+    id      = "log"
+    enabled = true
+    transition {
+      days          = 30
+      storage_class = "STANDARD_IA" # or "ONEZONE_IA"
+    }
+  }
+
+  tags = {
+    Name = "lambdabucket"
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "serverlessBucketRemovePublicAccess" {
+bucket = aws_s3_bucket.lambdabucket.id
+block_public_acls = true
+block_public_policy = true
+restrict_public_buckets = true
+ignore_public_acls = true
+}
+
+//adding lambda full access to gh actions user
+resource "aws_iam_user_policy_attachment" "ghactions_attach_gh_serverless_upload_to_s3_policy" {
+  user       = data.aws_iam_user.ghactions_user.user_name
+  policy_arn = "arn:aws:iam::aws:policy/AWSLambda_FullAccess"
+}
+
+resource "aws_sns_topic_subscription" "user_updates_sns_target" {
+  topic_arn = aws_sns_topic.assignment_sns_topic.arn
+  protocol  = "lambda"
+  endpoint  = "${aws_lambda_function.assignment_lambda.arn}"
+}
+
+resource "aws_lambda_permission" "lambda_sns_permission" {
+  statement_id  = "AllowExecutionFromSNS"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.assignment_lambda.function_name
+  principal     = "sns.amazonaws.com"
+  source_arn    = aws_sns_topic.assignment_sns_topic.arn
+}
+
+# Lambda Execution Policy
+resource "aws_iam_policy" "lambdapolicy" {
+  name        = "lambdapolicy"
+  path        = "/"
+  description = "lambdapolicy"
+  policy = <<EOF
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ses:SendEmail",
+                "ses:SendRawEmail"
+            ],
+            "Resource": "*"
+        }
+    ]
+}
+EOF
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_execution_policy_attachment" {
+  policy_arn = aws_iam_policy.lambdapolicy.arn
+  role       = aws_iam_role.iam_for_lambda.name
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_ses_policy_attachment" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSESFullAccess"
+  role       = aws_iam_role.iam_for_lambda.name
+}
+
+
+
+
+
+
+
+
+
+
+
 
 
 
