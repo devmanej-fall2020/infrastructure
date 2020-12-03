@@ -132,13 +132,13 @@ resource "aws_security_group" "webapp_security_group" {
   description = "Allow inbound traffic"
   vpc_id      = aws_vpc.assignmentvpc.id
 
-  ingress {
-    description = "Port 22"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = [var.cidr_block_map["cidr_route"]]
-  }
+  # ingress {
+  #   description = "Port 22"
+  #   from_port   = 22
+  #   to_port     = 22
+  #   protocol    = "tcp"
+  #   cidr_blocks = [var.cidr_block_map["cidr_route"]]
+  # }
 
   # ingress {
   #   description = "Port 80"
@@ -928,6 +928,13 @@ resource "aws_iam_role_policy_attachment" "lambda_ses_policy_attachment" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSESFullAccess"
   role       = aws_iam_role.iam_for_lambda.name
 }
+
+resource "aws_iam_role_policy_attachment" "lambda_dynamodb_policy_attachment" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess"
+  role       = aws_iam_role.iam_for_lambda.name
+}
+
+
 
 
 
