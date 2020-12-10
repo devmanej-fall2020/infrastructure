@@ -86,6 +86,7 @@ resource "aws_route_table_association" "rt_association_3" {
 
 
 resource "aws_security_group" "loadbalancer_security_group" {
+  name = "loadbalancer_security_group"
   description = "Allow inbound traffic"
   vpc_id      = aws_vpc.assignmentvpc.id
 
@@ -129,16 +130,17 @@ resource "aws_security_group" "loadbalancer_security_group" {
 }
 
 resource "aws_security_group" "webapp_security_group" {
+  name = "webapp_security_group"
   description = "Allow inbound traffic"
   vpc_id      = aws_vpc.assignmentvpc.id
 
-  ingress {
-    description = "Port 22"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = [var.cidr_block_map["cidr_route"]]
-  }
+  # ingress {
+  #   description = "Port 22"
+  #   from_port   = 22
+  #   to_port     = 22
+  #   protocol    = "tcp"
+  #   cidr_blocks = [var.cidr_block_map["cidr_route"]]
+  # }
 
   # ingress {
   #   description = "Port 80"
@@ -178,16 +180,17 @@ resource "aws_security_group" "webapp_security_group" {
 
 
 resource "aws_security_group" "database_security_group"{
+  name = "database_security_group"
   description = "Allow inbound traffic"
   vpc_id      = aws_vpc.assignmentvpc.id
 
-   ingress {
-    description = "Port 22"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = [var.cidr_block_map["cidr_route"]]
-  }
+  #  ingress {
+  #   description = "Port 22"
+  #   from_port   = 22
+  #   to_port     = 22
+  #   protocol    = "tcp"
+  #   cidr_blocks = [var.cidr_block_map["cidr_route"]]
+  # }
 
 
   ingress {
@@ -341,6 +344,7 @@ resource "aws_iam_instance_profile" "ec2_iam_ip" {
   name = "test1_profile"
   role = aws_iam_role.CodeDeployEC2ServiceRole.name
 }
+
 
 //ec2 role to pass on access to s3 buckets without explicitly specifying credentials
 resource "aws_iam_role" "ec2_role" {
@@ -967,6 +971,8 @@ resource "aws_db_parameter_group" "db-param-group-performance-schema" {
   }
 
 }
+
+
 
 
 
