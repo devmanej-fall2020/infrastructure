@@ -132,13 +132,13 @@ resource "aws_security_group" "webapp_security_group" {
   description = "Allow inbound traffic"
   vpc_id      = aws_vpc.assignmentvpc.id
 
-  # ingress {
-  #   description = "Port 22"
-  #   from_port   = 22
-  #   to_port     = 22
-  #   protocol    = "tcp"
-  #   cidr_blocks = [var.cidr_block_map["cidr_route"]]
-  # }
+  ingress {
+    description = "Port 22"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = [var.cidr_block_map["cidr_route"]]
+  }
 
   # ingress {
   #   description = "Port 80"
@@ -180,6 +180,14 @@ resource "aws_security_group" "webapp_security_group" {
 resource "aws_security_group" "database_security_group"{
   description = "Allow inbound traffic"
   vpc_id      = aws_vpc.assignmentvpc.id
+
+   ingress {
+    description = "Port 22"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = [var.cidr_block_map["cidr_route"]]
+  }
 
 
   ingress {
@@ -244,7 +252,7 @@ resource "aws_db_instance" "rdsassignmentdb" {
   allocated_storage = 20
   storage_type = "gp2"
   engine = "mysql"
-  instance_class = "db.t2.micro"
+  instance_class = "db.t3.micro"
   name = var.cred_vars["name"]
   username = var.cred_vars["username"]
   password = var.cred_vars["password"]
@@ -254,6 +262,13 @@ resource "aws_db_instance" "rdsassignmentdb" {
   skip_final_snapshot = true
   vpc_security_group_ids = [aws_security_group.database_security_group.id]
   db_subnet_group_name = aws_db_subnet_group.db_subnet_group.name
+  storage_encrypted = true
+  ca_cert_identifier = data.aws_rds_certificate.rdscert.id
+  parameter_group_name = aws_db_parameter_group.db-param-group-performance-schema.name
+}
+
+data "aws_rds_certificate" "rdscert" {
+  latest_valid_till = true
 }
 
 data "aws_ami" "amigetfunction" {
@@ -598,7 +613,7 @@ data "aws_route53_zone" "fetched_zone" {
 //create a type record from eip
 resource "aws_route53_record" "www" {
   zone_id = data.aws_route53_zone.fetched_zone.zone_id
-  name    = "www.api.${data.aws_route53_zone.fetched_zone.name}"
+  name    = "${data.aws_route53_zone.fetched_zone.name}"
   type    = "A"
 
   alias {
@@ -761,11 +776,18 @@ resource "aws_lb" "assignment-load-balancer" {
 
 }
 
+data "aws_acm_certificate" "issuedcertprod" {
+  domain   = "prod.jaisubashdevmane.me"
+  statuses = ["ISSUED"]
+}
+
 //Load Balancer Listener
 resource "aws_lb_listener" "lb_listener" {
   load_balancer_arn = aws_lb.assignment-load-balancer.arn
-  port              = "80"
-  protocol          = "HTTP"
+  port              = "443"
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-2016-08"
+  certificate_arn   = data.aws_acm_certificate.issuedcertprod.arn
 
   default_action {
     type             = "forward"
@@ -933,6 +955,20 @@ resource "aws_iam_role_policy_attachment" "lambda_dynamodb_policy_attachment" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess"
   role       = aws_iam_role.iam_for_lambda.name
 }
+
+resource "aws_db_parameter_group" "db-param-group-performance-schema" {
+  name   = "db-param-group-performance-schema"
+  family = "mysql8.0"
+
+  parameter {
+    name         = "performance_schema"
+    value        = "1"
+    apply_method = "pending-reboot"
+  }
+
+}
+
+
 
 
 
